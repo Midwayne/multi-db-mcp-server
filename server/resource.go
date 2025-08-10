@@ -3,8 +3,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"mongomcp/config"
 	"mongomcp/models"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,14 +50,35 @@ func NewCachedResourceHandler(ttl time.Duration, connManager *config.DBConnectio
 				client := conn.Client
 				dbNames, err := client.ListDatabaseNames(ctx, nil)
 				if err != nil {
-					return
+					// This error often indicates a permissions issue. As a fallback,
+					// try to extract the database name from the connection URI itself.
+					fmt.Printf("Could not list all databases for host %s: %v. Attempting to use database from connection string.\n", host, err)
+					parsedURL, parseErr := url.Parse(conn.ConnString)
+					if parseErr == nil {
+						dbNameFromURI := strings.TrimPrefix(parsedURL.Path, "/")
+						if dbNameFromURI != "" {
+							fmt.Printf("Found database in URI for host %s: %s\n", host, dbNameFromURI)
+							// Use the database from the URI as the only one to check.
+							dbNames = []string{dbNameFromURI}
+						} else {
+							fmt.Printf("No database found in URI for host %s. Skipping.\n", host)
+							return
+						}
+					} else {
+						fmt.Printf("Could not parse connection string for host %s. Skipping.\n", host)
+						return
+					}
 				}
+
 				hostData := make(map[string][]string)
 				for _, dbName := range dbNames {
 					collections, err := client.Database(dbName).ListCollectionNames(ctx, nil)
 					if err != nil {
+						// List the db even if the collections don't exist since the app might have more context
+						hostData[dbName] = []string{}
 						continue
 					}
+
 					hostData[dbName] = collections
 				}
 				mu.Lock()

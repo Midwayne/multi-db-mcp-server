@@ -15,8 +15,9 @@ var (
 )
 
 func LoadConfig() (*models.Config, error) {
-	viper.SetDefault("GOPROXY", "https://proxy.golang.org,direct")
 	viper.SetDefault("TOOLS", "connect,find,aggregate,count,list-databases,list-collections,collection-indexes,collection-schema,collection-storage-size,db-stats")
+	viper.SetDefault("SERVE_MODE", "stdio") // Default to stdio
+	viper.SetDefault("PORT", "8080")        // Default to port 8080
 
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -38,12 +39,10 @@ func LoadConfig() (*models.Config, error) {
 		return nil, err
 	}
 
-	// Load MongoDB connection strings from environment variables
-	for _, env := range os.Environ() {
-		if strings.HasPrefix(env, "MONGO_CONN") {
-			parts := strings.SplitN(env, "=", 2)
-			if len(parts) == 2 {
-				config.MongoURIs = append(config.MongoURIs, parts[1])
+	for key, value := range viper.AllSettings() {
+		if strings.HasPrefix(strings.ToUpper(key), "MONGO_CONN") {
+			if uri, ok := value.(string); ok {
+				config.MongoURIs = append(config.MongoURIs, uri)
 			}
 		}
 	}

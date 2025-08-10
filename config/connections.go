@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"mongomcp/constants"
 	"mongomcp/models"
@@ -30,6 +31,12 @@ func NewConnectionManager(appConfig models.Config) (*DBConnections, error) {
 		client, err := mongo.Connect(clientOpts)
 		if err != nil {
 			fmt.Printf("Failed to connect to MongoDB host %s: %v\n", host, err)
+			continue
+		}
+
+		// Ping the primary to verify that the connection is alive.
+		if err := client.Ping(context.Background(), nil); err != nil {
+			fmt.Printf("Failed to connect to MongoDB host %s (ping failed): %v\n", host, err)
 			continue
 		}
 
