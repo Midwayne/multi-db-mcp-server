@@ -2,93 +2,16 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"mongomcp/config"
-	"mongomcp/models"
-	"net/url"
-	"strings"
-	"sync"
-	"time"
+	"mongomcp/services"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// cacheEntry holds the cached data and its timestamp.
-type cacheEntry struct {
-	data      []mcp.ResourceContents
-	timestamp time.Time
-}
-
-// CachedResourceHandler provides a caching layer for a resource handler.
-type CachedResourceHandler struct {
-	cache       map[string]cacheEntry
-	mutex       sync.RWMutex
-	ttl         time.Duration
-	fetchData   server.ResourceHandlerFunc
-	connManager *config.DBConnections
-}
-
-// NewCachedResourceHandler creates a new cached handler with a specific TTL.
-func NewCachedResourceHandler(ttl time.Duration, connManager *config.DBConnections) *CachedResourceHandler {
-	handler := &CachedResourceHandler{
-		cache:       make(map[string]cacheEntry),
-		ttl:         ttl,
-		connManager: connManager,
-	}
-
-	handler.fetchData = server.ResourceHandlerFunc(func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		landscape := make(map[string]map[string][]string)
-		var mu sync.Mutex
-		var wg sync.WaitGroup
-
-		for host, conn := range *handler.connManager {
-			wg.Add(1)
-			go func(host string, conn *models.DBConnection) {
-				defer wg.Done()
-				client := conn.Client
-				dbNames, err := client.ListDatabaseNames(ctx, nil)
-				if err != nil {
-					// This error often indicates a permissions issue. As a fallback,
-					// try to extract the database name from the connection URI itself.
-					fmt.Printf("Could not list all databases for host %s: %v. Attempting to use database from connection string.\n", host, err)
-					parsedURL, parseErr := url.Parse(conn.ConnString)
-					if parseErr == nil {
-						dbNameFromURI := strings.TrimPrefix(parsedURL.Path, "/")
-						if dbNameFromURI != "" {
-							fmt.Printf("Found database in URI for host %s: %s\n", host, dbNameFromURI)
-							// Use the database from the URI as the only one to check.
-							dbNames = []string{dbNameFromURI}
-						} else {
-							fmt.Printf("No database found in URI for host %s. Skipping.\n", host)
-							return
-						}
-					} else {
-						fmt.Printf("Could not parse connection string for host %s. Skipping.\n", host)
-						return
-					}
-				}
-
-				hostData := make(map[string][]string)
-				for _, dbName := range dbNames {
-					collections, err := client.Database(dbName).ListCollectionNames(ctx, nil)
-					if err != nil {
-						// List the db even if the collections don't exist since the app might have more context
-						hostData[dbName] = []string{}
-						continue
-					}
-
-					hostData[dbName] = collections
-				}
-				mu.Lock()
-				landscape[host] = hostData
-				mu.Unlock()
-			}(host, conn)
-		}
-		wg.Wait()
-
-		jsonData, err := json.Marshal(landscape)
+// InitializeMongoResource adds the MongoDB resource definition to the MCP server
+func InitializeMongoResource(s *server.MCPServer, landscapeCache *services.LandscapeCache) {
+	resourceHandler := server.ResourceHandlerFunc(func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		jsonData, err := landscapeCache.GetLandscapeAsJSON(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -97,48 +20,14 @@ func NewCachedResourceHandler(ttl time.Duration, connManager *config.DBConnectio
 			mcp.TextResourceContents{
 				URI:      req.Params.URI,
 				MIMEType: "application/json",
-				Text:     string(jsonData),
+				Text:     jsonData,
 			},
 		}, nil
 	})
-	return handler
-}
-
-// Handle checks the cache first, and if the data is stale or non-existent, fetches fresh data.
-func (h *CachedResourceHandler) Handle(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	h.mutex.RLock()
-	if entry, exists := h.cache[req.Params.URI]; exists {
-		if time.Since(entry.timestamp) < h.ttl {
-			h.mutex.RUnlock()
-			return entry.data, nil
-		}
-	}
-	h.mutex.RUnlock()
-
-	// Fetch fresh data using the encapsulated fetch function
-	data, err := h.fetchData(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Cache the result
-	h.mutex.Lock()
-	h.cache[req.Params.URI] = cacheEntry{
-		data:      data,
-		timestamp: time.Now(),
-	}
-	h.mutex.Unlock()
-
-	return data, nil
-}
-
-// InitializeMongoResourceWithCache adds the MongoDB resource definition to the MCP server.
-func InitializeMongoResourceWithCache(s *server.MCPServer, connManager *config.DBConnections) {
-	cachedHandler := NewCachedResourceHandler(5*time.Minute, connManager) // Currently hardcoded to 5 mins (TBD)
 
 	s.AddResource(mcp.Resource{
 		URI:         "config://db",
 		Name:        "Mongo Landscape",
 		Description: "A landscape view of all connected MongoDB hosts, their databases and collections.",
-	}, server.ResourceHandlerFunc(cachedHandler.Handle))
+	}, resourceHandler)
 }

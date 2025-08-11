@@ -15,13 +15,6 @@ func InitializeTools(s *server.MCPServer, connManager *config.DBConnections, ena
 		enabledToolsSet[toolName] = struct{}{}
 	}
 
-	// To be removed in the near future.
-	s.AddTool(mcp.NewTool("landscape",
-		mcp.WithDescription("Gets a view of the MongoDB landscape"),
-	), server.ToolHandlerFunc(func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return services.GetMongoLandscape(connManager, request)
-	}))
-
 	if _, ok := enabledToolsSet["find"]; ok {
 		s.AddTool(mcp.NewTool("find",
 			mcp.WithDescription("Finds documents in a collection"),

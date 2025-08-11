@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"mongomcp/config"
 	mongoServer "mongomcp/server"
+	"mongomcp/services"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -25,11 +29,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	landscapeCache := services.NewLandscapeCache(5*time.Minute, connManager)
+
 	s := mongoServer.InitializeMCPServer()
 
 	mongoServer.InitializeTools(s, connManager, cfg.Tools)
 
-	mongoServer.InitializeMongoResourceWithCache(s, connManager)
+	mongoServer.InitializeMongoResource(s, landscapeCache)
+
+	// To be removed in the near future
+	s.AddTool(mcp.NewTool("landscape",
+		mcp.WithDescription("Gets a view of the MongoDB landscape"),
+	), server.ToolHandlerFunc(func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return services.GetMongoLandscape(landscapeCache, request)
+	}))
 
 	fmt.Printf("Starting Multi MongoDB MCP Server in %s mode...\n", cfg.ServeMode)
 	address := fmt.Sprintf(":%s", cfg.Port)
