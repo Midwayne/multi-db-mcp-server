@@ -166,15 +166,116 @@ func (a *Adapter) Execute(ctx context.Context, sqlText, paramsJSON string) (*db.
 	return &db.ExecResult{RowsAffected: tag.RowsAffected()}, nil
 }
 
-func (a *Adapter) ListDatabases(ctx context.Context) ([]map[string]any, error) {
-	return a.queryMaps(ctx, `SELECT datname AS name FROM pg_database WHERE datistemplate = false ORDER BY datname`)
+// DatabaseInfo is a PostgreSQL database and the schemas it contains.
+type DatabaseInfo struct {
+	Name    string   `json:"name"`
+	Schemas []string `json:"schemas"`
+}
+
+func (a *Adapter) ListDatabases(ctx context.Context) ([]DatabaseInfo, error) {
+	names, err := a.databaseNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	current, err := a.currentDatabase(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]DatabaseInfo, 0, len(names))
+	for _, name := range names {
+		schemas, err := a.schemasInDatabase(ctx, name, current)
+		if err != nil {
+			schemas = []string{}
+		}
+		out = append(out, DatabaseInfo{Name: name, Schemas: schemas})
+	}
+	return out, nil
 }
 
 func (a *Adapter) ListSchemas(ctx context.Context) ([]map[string]any, error) {
-	return a.queryMaps(ctx, `
-		SELECT schema_name AS name
+	if a.pool == nil {
+		return nil, fmt.Errorf("postgres pool is not connected")
+	}
+	names, err := schemaNames(ctx, a.pool)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		out = append(out, map[string]any{"name": name})
+	}
+	return out, nil
+}
+
+func (a *Adapter) databaseNames(ctx context.Context) ([]string, error) {
+	if a.pool == nil {
+		return nil, fmt.Errorf("postgres pool is not connected")
+	}
+	rows, err := a.pool.Query(ctx, `SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname`)
+	if err != nil {
+		return nil, err
+	}
+	return scanStrings(rows)
+}
+
+func (a *Adapter) currentDatabase(ctx context.Context) (string, error) {
+	if a.pool == nil {
+		return "", fmt.Errorf("postgres pool is not connected")
+	}
+	var name string
+	err := a.pool.QueryRow(ctx, "SELECT current_database()").Scan(&name)
+	return name, err
+}
+
+func (a *Adapter) schemasInDatabase(ctx context.Context, dbName, current string) ([]string, error) {
+	if dbName == current {
+		return schemaNames(ctx, a.pool)
+	}
+	if a.Conn.ConnectTimeoutDur > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, a.Conn.ConnectTimeoutDur)
+		defer cancel()
+	}
+	cfg, err := pgx.ParseConfig(a.Conn.URI)
+	if err != nil {
+		return nil, fmt.Errorf("postgres parse uri: %w", err)
+	}
+	cfg.Database = dbName
+	cfg.ConnectTimeout = a.Conn.ConnectTimeoutDur
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+	return schemaNames(ctx, conn)
+}
+
+type queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+func schemaNames(ctx context.Context, q queryer) ([]string, error) {
+	rows, err := q.Query(ctx, `
+		SELECT schema_name
 		FROM information_schema.schemata
 		ORDER BY schema_name`)
+	if err != nil {
+		return nil, err
+	}
+	return scanStrings(rows)
+}
+
+func scanStrings(rows pgx.Rows) ([]string, error) {
+	defer rows.Close()
+	names := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
 }
 
 func (a *Adapter) ListTables(ctx context.Context, schema string) ([]map[string]any, error) {

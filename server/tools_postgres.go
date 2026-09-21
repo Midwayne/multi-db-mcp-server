@@ -59,18 +59,18 @@ func registerPostgresExecute(s *mcpserver.MCPServer, app *App) {
 
 func registerPostgresListDatabases(s *mcpserver.MCPServer, app *App) {
 	s.AddTool(mcp.NewTool(ToolPostgresListDatabases,
-		mcp.WithDescription("List PostgreSQL databases"),
+		mcp.WithDescription("List PostgreSQL databases and the schemas in each database"),
 		connectionOption(),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		pg, res := app.requirePostgres(ctx, request, ToolPostgresListDatabases, access.OpRead)
 		if res != nil {
 			return res, nil
 		}
-		rows, err := pg.ListDatabases(ctx)
+		dbs, err := pg.ListDatabases(ctx)
 		if err != nil {
 			return errResult(err)
 		}
-		return jsonResult(rows)
+		return jsonResult(dbs)
 	})
 }
 
