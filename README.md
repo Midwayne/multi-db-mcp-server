@@ -2,6 +2,8 @@
 
 Talk to **MongoDB**, **PostgreSQL**, and **Redis** from one MCP server. You describe your databases in a YAML file; the agent lists them, checks permissions, and queries each one by name.
 
+**Per-database tools and access:** [MongoDB](db/mongodb/README.md) · [PostgreSQL](db/postgres/README.md) · [Redis](db/redis/README.md)
+
 ## 5-minute setup
 
 **1. Build the binary**
@@ -55,6 +57,8 @@ Copy one of these into `spec.yaml`. Change the `name`, `uri`, and `access`. Add 
 
 ### Postgres only (read-only)
 
+Full tool list: [PostgreSQL](db/postgres/README.md).
+
 ```yaml
 connections:
   - name: app
@@ -64,6 +68,8 @@ connections:
 ```
 
 ### MongoDB only (read-write)
+
+Full tool list: [MongoDB](db/mongodb/README.md).
 
 ```yaml
 connections:
@@ -75,6 +81,8 @@ connections:
 ```
 
 ### Redis only (read-only)
+
+Full tool list: [Redis](db/redis/README.md).
 
 ```yaml
 connections:
@@ -112,8 +120,8 @@ connections:
 Ready-made files you can copy:
 
 - [`spec.example.yaml`](spec.example.yaml) — annotated file with all three engines
-- [`examples/postgres-readonly.yaml`](examples/postgres-readonly.yaml)
-- [`examples/mongo-readwrite.yaml`](examples/mongo-readwrite.yaml)
+- [`examples/postgres-readonly.yaml`](examples/postgres-readonly.yaml) — see [PostgreSQL tools](db/postgres/README.md)
+- [`examples/mongo-readwrite.yaml`](examples/mongo-readwrite.yaml) — see [MongoDB tools](db/mongodb/README.md)
 - [`examples/mixed.yaml`](examples/mixed.yaml)
 
 ---
@@ -157,7 +165,7 @@ Only `connections` is required. Everything else has defaults.
 | Field | Required | What it is |
 | --- | --- | --- |
 | `name` | yes | Short label the agent passes as `connection`. Use `app`, `analytics`, `prod-pg`. |
-| `type` | yes | `mongodb` (or `mongo`), `postgres` (or `pg`), `redis` |
+| `type` | yes | `mongodb` (or `mongo`), `postgres` (or `pg`), `redis` — see [MongoDB](db/mongodb/README.md), [PostgreSQL](db/postgres/README.md), [Redis](db/redis/README.md) |
 | `uri` | yes, unless you use host fields | Connection string |
 | `access` | no | `read_only` (default), `read_write`, or `admin` |
 | `database` | no | Default Mongo/Postgres database for tools |
@@ -246,12 +254,13 @@ Per connection:
 2. `list_permissions` — omit `connection` for all, or pass one name. Add `include_server: true` for live roles/ACL
 3. Engine tools with that same `connection` name, for example `postgres_query` / `mongo_find` / `redis_get`
 
-| Engine | Read tools | Write tools (need `read_write` or `admin`) |
-| --- | --- | --- |
-| Any | `list_connections`, `list_permissions`, `ping`, `landscape` | — |
-| MongoDB | `mongo_find`, `mongo_aggregate`, `mongo_count`, `mongo_list_databases`, `mongo_list_collections`, `mongo_indexes`, `mongo_schema`, `mongo_stats` | `mongo_insert`, `mongo_update`, `mongo_delete` |
-| Postgres | `postgres_query`, `postgres_list_databases`, `postgres_list_schemas`, `postgres_list_tables`, `postgres_describe_table`, `postgres_stats` | `postgres_execute` (DDL still needs `admin`) |
-| Redis | `redis_get`, `redis_scan`, `redis_info`, `redis_command` (read commands) | `redis_set`, `redis_delete`; write/admin Redis commands via `redis_command` |
+Shared tools on every spec: `list_connections`, `list_permissions`, `ping`, `landscape`. Each engine’s tools, arguments, and access rules:
+
+| Engine | Guide |
+| --- | --- |
+| MongoDB | [db/mongodb/README.md](db/mongodb/README.md) — find, aggregate, insert/update/delete |
+| PostgreSQL | [db/postgres/README.md](db/postgres/README.md) — query, execute, list/describe tables |
+| Redis | [db/redis/README.md](db/redis/README.md) — GET/SET, SCAN, INFO, `redis_command` |
 
 ---
 
@@ -307,9 +316,9 @@ Each database kind is a self-contained plugin:
 
 1. `db/<kind>/` — implement `db.Adapter`. In `init`, call `spec.RegisterKind` (type aliases + host/port URI builder) and `db.Register` (opener).
 2. `connect/connect.go` — blank-import that package. This is the only composition-root edit.
-3. `server/tools_<kind>.go` — MCP tools. In `init`, call `RegisterEngineTools`. Add or drop a feature by adding or removing one `toolSpec` in that file.
+3. `server/tools_<kind>.go` — MCP tools. In `init`, call `RegisterEngineTools`. Add or drop a feature by adding or removing one `toolSpec` in that file. Document the kind in `db/<kind>/README.md` and link it from this file.
 
-Removing a kind is the reverse: delete the adapter package, delete the tools file, remove the blank import.
+Removing a kind is the reverse: delete the adapter package, delete the tools file, remove the blank import, remove the guide link.
 
 Access modes, `list_connections`, and `list_permissions` stay generic. Optional live identity is `db.IdentityProvider`; permission footnotes hang off the tool spec (`Note`), not a type switch.
 

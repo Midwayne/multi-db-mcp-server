@@ -2,6 +2,7 @@
 # ${ENV} and ${ENV:-default} are expanded when the server starts.
 #
 # Quick start: you only need a connections list. See README.md for recipes.
+# Per-engine tools: db/mongodb/README.md, db/postgres/README.md, db/redis/README.md.
 
 server:
   name: Multi-Database MCP
