@@ -148,13 +148,13 @@ connections:
 	dbs := callToolText(t, cl, server.ToolMongoListDatabases, map[string]any{
 		"connection": "mongo-rw",
 	})
-	var listed []struct {
+	var databases []struct {
 		Name        string   `json:"name"`
 		Collections []string `json:"collections"`
 	}
-	decodeJSON(t, dbs, &listed)
+	decodeJSON(t, dbs, &databases)
 	byName := map[string][]string{}
-	for _, info := range listed {
+	for _, info := range databases {
 		byName[info.Name] = info.Collections
 	}
 	if !containsString(byName["inventory"], "products") {
