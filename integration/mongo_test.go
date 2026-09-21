@@ -148,8 +148,20 @@ connections:
 	dbs := callToolText(t, cl, server.ToolMongoListDatabases, map[string]any{
 		"connection": "mongo-rw",
 	})
-	if !strings.Contains(dbs, "inventory") || !strings.Contains(dbs, "orders") {
-		t.Fatalf("list databases: %s", dbs)
+	var listed []struct {
+		Name        string   `json:"name"`
+		Collections []string `json:"collections"`
+	}
+	decodeJSON(t, dbs, &listed)
+	byName := map[string][]string{}
+	for _, info := range listed {
+		byName[info.Name] = info.Collections
+	}
+	if !containsString(byName["inventory"], "products") {
+		t.Fatalf("list databases missing inventory.products: %s", dbs)
+	}
+	if !containsString(byName["orders"], "tickets") {
+		t.Fatalf("list databases missing orders.tickets: %s", dbs)
 	}
 
 	perm := callToolText(t, cl, server.ToolListPermissions, map[string]any{

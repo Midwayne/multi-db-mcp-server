@@ -97,18 +97,18 @@ func registerMongoCount(s *mcpserver.MCPServer, app *App) {
 
 func registerMongoListDatabases(s *mcpserver.MCPServer, app *App) {
 	s.AddTool(mcp.NewTool(ToolMongoListDatabases,
-		mcp.WithDescription("List databases on a MongoDB connection"),
+		mcp.WithDescription("List databases on a MongoDB connection and the collections in each database"),
 		connectionOption(),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		mongo, res := app.requireMongo(ctx, request, ToolMongoListDatabases, access.OpRead)
 		if res != nil {
 			return res, nil
 		}
-		names, err := mongo.ListDatabases(ctx)
+		dbs, err := mongo.ListDatabases(ctx)
 		if err != nil {
 			return errResult(err)
 		}
-		return jsonResult(names)
+		return jsonResult(dbs)
 	})
 }
 
