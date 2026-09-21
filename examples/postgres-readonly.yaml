@@ -1,0 +1,7 @@
+# Read-only Postgres. Copy to spec.yaml and set the URI.
+
+connections:
+  - name: app
+    type: postgres
+    uri: ${POSTGRES_URI:-postgres://postgres:postgres@localhost:5432/app?sslmode=disable}
+    access: read_only

@@ -2,69 +2,66 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
-	"time"
+	"syscall"
 
-	"mongomcp/config"
-	mongoServer "mongomcp/server"
-	"mongomcp/services"
+	"dbmcp/connect"
+	"dbmcp/server"
+	"dbmcp/spec"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
 func main() {
-	cfg, err := config.LoadConfig()
+	specPath := flag.String("spec", "", "Path to the YAML or JSON spec file (defaults to DBMCP_SPEC or spec.yaml)")
+	flag.Parse()
+
+	cfg, err := spec.Load(*specPath)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading spec: %v\n", err)
 		os.Exit(1)
 	}
 
-	connManager, err := config.NewConnectionManager(*cfg)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	registry, err := connect.NewRegistry(ctx, cfg)
 	if err != nil {
-		fmt.Printf("Error initializing connection manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error initializing connections: %v\n", err)
 		os.Exit(1)
 	}
+	defer func() {
+		if err := registry.Close(context.Background()); err != nil {
+			log.Printf("error closing connections: %v", err)
+		}
+	}()
 
-	landscapeCache := services.NewLandscapeCache(5*time.Minute, connManager)
+	mcp := server.NewMCPServer(&server.App{Spec: cfg, Registry: registry})
+	fmt.Fprintf(os.Stderr, "Starting %s (%s) in %s mode with %d connection(s)...\n",
+		cfg.Server.Name, cfg.Server.Version, cfg.Server.ServeMode, len(registry.List()))
 
-	s := mongoServer.InitializeMCPServer()
+	if err := serve(mcp, cfg); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
+}
 
-	mongoServer.InitializeTools(s, connManager, cfg.Tools)
-
-	mongoServer.InitializeMongoResource(s, landscapeCache)
-
-	// To be removed in the near future
-	s.AddTool(mcp.NewTool("landscape",
-		mcp.WithDescription("Gets a view of the MongoDB landscape"),
-	), server.ToolHandlerFunc(func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return services.GetMongoLandscape(landscapeCache, request)
-	}))
-
-	fmt.Printf("Starting Multi MongoDB MCP Server in %s mode...\n", cfg.ServeMode)
-	address := fmt.Sprintf(":%s", cfg.Port)
-
-	switch strings.ToLower(cfg.ServeMode) {
+func serve(s *mcpserver.MCPServer, cfg *spec.Spec) error {
+	address := fmt.Sprintf(":%d", cfg.Server.Port)
+	switch strings.ToLower(cfg.Server.ServeMode) {
 	case "stdio":
-		if err := server.ServeStdio(s); err != nil {
-			log.Fatalf("Server error (stdio): %v", err)
-		}
+		return mcpserver.ServeStdio(s)
 	case "http":
-		fmt.Printf("Listening on http://localhost%s\n", address)
-		httpServer := server.NewStreamableHTTPServer(s)
-		if err := httpServer.Start(address); err != nil {
-			log.Fatalf("Server error (http): %v", err)
-		}
+		fmt.Fprintf(os.Stderr, "Listening on http://localhost%s\n", address)
+		return mcpserver.NewStreamableHTTPServer(s).Start(address)
 	case "sse":
-		fmt.Printf("Listening on http://localhost%s\n", address)
-		sseServer := server.NewSSEServer(s)
-		if err := sseServer.Start(address); err != nil {
-			log.Fatalf("Server error (sse): %v", err)
-		}
+		fmt.Fprintf(os.Stderr, "Listening on http://localhost%s\n", address)
+		return mcpserver.NewSSEServer(s).Start(address)
 	default:
-		log.Fatalf("Invalid SERVE_MODE: %s. Must be one of 'stdio', 'http', or 'sse'.", cfg.ServeMode)
+		return fmt.Errorf("invalid serve_mode %q", cfg.Server.ServeMode)
 	}
 }

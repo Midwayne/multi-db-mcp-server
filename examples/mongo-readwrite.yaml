@@ -1,0 +1,8 @@
+# MongoDB with writes enabled. Copy to spec.yaml and set the URI.
+
+connections:
+  - name: app
+    type: mongodb
+    uri: ${MONGO_URI:-mongodb://localhost:27017}
+    database: app
+    access: read_write
