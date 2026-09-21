@@ -9,8 +9,8 @@ Talk to **MongoDB**, **PostgreSQL**, and **Redis** from one MCP server. You desc
 **1. Build the binary**
 
 ```bash
-git clone https://github.com/Midwayne/multi-mongodb-mcp-server.git
-cd multi-mongodb-mcp-server
+git clone https://github.com/Midwayne/multi-db-mcp-server.git
+cd multi-db-mcp-server
 go build -o dbmcp .
 ```
 
