@@ -45,10 +45,14 @@ func (a *App) permissionReports(ctx context.Context, connection string, includeS
 			live, err := a.Registry.Get(ctx, adapter.Name())
 			if err != nil {
 				report.ServerError = err.Error()
-			} else if ident, err := fetchServerIdentity(ctx, live); err != nil {
-				report.ServerError = err.Error()
-			} else if ident != nil {
-				report.Server = ident
+			} else {
+				report.Ready = live.Connected()
+				ident, err := fetchServerIdentity(ctx, live)
+				if err != nil {
+					report.ServerError = err.Error()
+				} else if ident != nil {
+					report.Server = ident
+				}
 			}
 		}
 		out = append(out, report)

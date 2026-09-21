@@ -65,6 +65,52 @@ func TestRegistryAnyAllows(t *testing.T) {
 	}
 }
 
+func TestRegistryGetEveryNamedConnection(t *testing.T) {
+	t.Parallel()
+	enabled := true
+	sp := &spec.Spec{Connections: []spec.Connection{
+		testConn("mongo-ro", "mongodb", access.ModeReadOnly, nil),
+		testConn("pg-rw", "postgres", access.ModeReadWrite, nil),
+		testConn("cache", "redis", access.ModeAdmin, nil),
+	}}
+	for i := range sp.Connections {
+		sp.Connections[i].Enabled = &enabled
+		sp.Connections[i].EnabledVal = true
+	}
+	reg, err := NewRegistry(context.Background(), sp, func(c spec.Connection) (Adapter, error) {
+		return &stubAdapter{Meta: Meta{Conn: c}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"mongo-ro", "pg-rw", "cache"} {
+		adapter, err := reg.Get(context.Background(), name)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", name, err)
+		}
+		if adapter.Name() != name {
+			t.Fatalf("Get(%s) returned %s", name, adapter.Name())
+		}
+	}
+	info := reg.List()
+	if len(info) != 3 {
+		t.Fatalf("List()=%d want 3", len(info))
+	}
+	byName := map[string]Info{}
+	for _, item := range info {
+		byName[item.Name] = item
+	}
+	if !byName["mongo-ro"].CanRead || byName["mongo-ro"].CanWrite {
+		t.Fatalf("mongo-ro flags: %+v", byName["mongo-ro"])
+	}
+	if !byName["pg-rw"].CanWrite || byName["pg-rw"].CanAdmin {
+		t.Fatalf("pg-rw flags: %+v", byName["pg-rw"])
+	}
+	if !byName["cache"].CanAdmin {
+		t.Fatalf("cache flags: %+v", byName["cache"])
+	}
+}
+
 func TestRegistryUnknownConnection(t *testing.T) {
 	t.Parallel()
 	enabled := true

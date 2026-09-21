@@ -55,4 +55,10 @@ func TestModeAllows(t *testing.T) {
 	if len(got) != 2 || got[0] != OpRead || got[1] != OpWrite {
 		t.Fatalf("read_write operations: %v", got)
 	}
+	if got := ModeReadOnly.Operations(); len(got) != 1 || got[0] != OpRead {
+		t.Fatalf("read_only operations: %v", got)
+	}
+	if got := ModeAdmin.Operations(); len(got) != 3 {
+		t.Fatalf("admin operations: %v", got)
+	}
 }
