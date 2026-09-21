@@ -85,11 +85,14 @@ connections:
 	if !strings.Contains(got, "ok") {
 		t.Fatalf("redis get: %s", got)
 	}
-	_ = callToolError(t, cl, server.ToolRedisSet, map[string]any{
+	denied := callToolError(t, cl, server.ToolRedisCommand, map[string]any{
 		"connection": "cache",
-		"key":        "health",
-		"value":      "mutated",
+		"command":    "SET",
+		"args":       []any{"health", "mutated"},
 	})
+	if !containsFold(denied, "does not allow write") {
+		t.Fatalf("read_only redis write: %s", denied)
+	}
 
 	if pg != nil {
 		_ = callToolText(t, cl, server.ToolPing, map[string]any{"connection": "app"})
@@ -120,20 +123,18 @@ connections:
 		if !docsHave(found.Documents, "sku", "A-1") {
 			t.Fatalf("mongo find: %s", docs)
 		}
-		writeDenied := callToolError(t, cl, server.ToolMongoInsert, map[string]any{
-			"connection":      "catalog",
-			"collection_name": "products",
-			"documents":       `{"sku":"nope"}`,
-		})
-		if !containsFold(writeDenied, "does not allow write") {
-			t.Fatalf("read_only mongo write: %s", writeDenied)
-		}
 		cross := callToolError(t, cl, server.ToolRedisGet, map[string]any{
 			"connection": "catalog",
 			"key":        "health",
 		})
 		if !containsFold(cross, "expected redis") {
 			t.Fatalf("mongo must not answer redis tools: %s", cross)
+		}
+		permOne := callToolText(t, cl, server.ToolListPermissions, map[string]any{"connection": "catalog"})
+		var one []permissionReport
+		decodeJSON(t, permOne, &one)
+		if len(one) != 1 || one[0].CanWrite {
+			t.Fatalf("catalog should be read_only: %s", permOne)
 		}
 	}
 

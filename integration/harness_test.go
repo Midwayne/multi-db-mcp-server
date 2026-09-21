@@ -325,10 +325,10 @@ func seedPostgres(t *testing.T, port uint32) {
 func startSharedMongo() {
 	mongoOnce.Do(func() {
 		srv, err := memongo.StartWithOptions(&memongo.Options{
-			MongoVersion:   "6.0.0",
+			MongoVersion:   "6.0.16",
 			LogLevel:       memongolog.LogLevelSilent,
 			Logger:         log.New(io.Discard, "", 0),
-			StartupTimeout: 45 * time.Second,
+			StartupTimeout: 60 * time.Second,
 		})
 		if err != nil {
 			mongoErr = err
