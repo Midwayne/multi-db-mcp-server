@@ -300,8 +300,21 @@ Every tool takes `connection` matching the spec `name`. Run `list_connections` i
 ## For contributors
 
 ```
-spec.yaml  →  spec.Load  →  connect.Open (mongodb | postgres | redis)
-                         →  db.Registry  →  MCP tools
+spec.yaml  →  spec.Load  →  db.Open (engine registry)  →  db.Registry  →  MCP tools
 ```
 
-To add an engine: implement `db.Adapter`, handle it in `connect.Open`, and register tools under `server/`.
+Each database kind is a self-contained plugin:
+
+1. `db/<kind>/` — implement `db.Adapter`. In `init`, call `spec.RegisterKind` (type aliases + host/port URI builder) and `db.Register` (opener).
+2. `connect/connect.go` — blank-import that package. This is the only composition-root edit.
+3. `server/tools_<kind>.go` — MCP tools. In `init`, call `RegisterEngineTools`. Add or drop a feature by adding or removing one `toolSpec` in that file.
+
+Removing a kind is the reverse: delete the adapter package, delete the tools file, remove the blank import.
+
+Access modes, `list_connections`, and `list_permissions` stay generic. Optional live identity is `db.IdentityProvider`; permission footnotes hang off the tool spec (`Note`), not a type switch.
+
+```bash
+go test ./...
+go test -short ./...   # skip live integration engines
+```
+

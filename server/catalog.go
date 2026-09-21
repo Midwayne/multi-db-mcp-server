@@ -1,6 +1,8 @@
 package server
 
 import (
+	"sync"
+
 	"dbmcp/access"
 	"dbmcp/db"
 
@@ -46,42 +48,38 @@ type toolSpec struct {
 	DBType   db.Type
 	Op       access.Operation
 	Register func(s *server.MCPServer, app *App)
+	Note     func(adapter db.Adapter, allowed bool) string
 }
 
-func catalog() []toolSpec {
+var (
+	engineToolsMu sync.Mutex
+	engineTools   []toolSpec
+)
+
+// RegisterEngineTools adds MCP tools for a database kind. Call from init in
+// that engine's tools file. Removing the file unregisters the features.
+func RegisterEngineTools(tools ...toolSpec) {
+	engineToolsMu.Lock()
+	defer engineToolsMu.Unlock()
+	engineTools = append(engineTools, tools...)
+}
+
+func commonTools() []toolSpec {
 	return []toolSpec{
 		{Name: ToolListConnections, Op: access.OpRead, Register: registerListConnections},
 		{Name: ToolListPermissions, Op: access.OpRead, Register: registerListPermissions},
 		{Name: ToolPing, Op: access.OpRead, Register: registerPing},
 		{Name: ToolLandscape, Op: access.OpRead, Register: registerLandscape},
-
-		{Name: ToolMongoFind, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoFind},
-		{Name: ToolMongoAggregate, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoAggregate},
-		{Name: ToolMongoCount, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoCount},
-		{Name: ToolMongoListDatabases, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoListDatabases},
-		{Name: ToolMongoListCollections, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoListCollections},
-		{Name: ToolMongoIndexes, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoIndexes},
-		{Name: ToolMongoSchema, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoSchema},
-		{Name: ToolMongoStats, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoStats},
-		{Name: ToolMongoInsert, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoInsert},
-		{Name: ToolMongoUpdate, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoUpdate},
-		{Name: ToolMongoDelete, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoDelete},
-
-		{Name: ToolPostgresQuery, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresQuery},
-		{Name: ToolPostgresExecute, DBType: db.TypePostgres, Op: access.OpWrite, Register: registerPostgresExecute},
-		{Name: ToolPostgresListDatabases, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListDatabases},
-		{Name: ToolPostgresListSchemas, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListSchemas},
-		{Name: ToolPostgresListTables, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListTables},
-		{Name: ToolPostgresDescribeTable, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresDescribeTable},
-		{Name: ToolPostgresStats, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresStats},
-
-		{Name: ToolRedisCommand, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisCommand},
-		{Name: ToolRedisGet, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisGet},
-		{Name: ToolRedisScan, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisScan},
-		{Name: ToolRedisInfo, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisInfo},
-		{Name: ToolRedisSet, DBType: db.TypeRedis, Op: access.OpWrite, Register: registerRedisSet},
-		{Name: ToolRedisDelete, DBType: db.TypeRedis, Op: access.OpWrite, Register: registerRedisDelete},
 	}
+}
+
+func catalog() []toolSpec {
+	engineToolsMu.Lock()
+	defer engineToolsMu.Unlock()
+	out := make([]toolSpec, 0, 4+len(engineTools))
+	out = append(out, commonTools()...)
+	out = append(out, engineTools...)
+	return out
 }
 
 func ShouldRegister(tool toolSpec, app *App) bool {

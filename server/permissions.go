@@ -5,9 +5,6 @@ import (
 
 	"dbmcp/access"
 	"dbmcp/db"
-	"dbmcp/db/mongodb"
-	"dbmcp/db/postgres"
-	redisdb "dbmcp/db/redis"
 )
 
 type permissionReport struct {
@@ -63,6 +60,7 @@ func (a *App) permissionReports(ctx context.Context, connection string, includeS
 func (a *App) permissionReport(adapter db.Adapter) permissionReport {
 	allowed := make([]string, 0)
 	denied := make([]string, 0)
+	var notes []string
 	for _, tool := range catalog() {
 		if tool.DBType != "" && tool.DBType != adapter.Type() {
 			continue
@@ -75,14 +73,11 @@ func (a *App) permissionReport(adapter db.Adapter) permissionReport {
 		} else {
 			denied = append(denied, tool.Name)
 		}
-	}
-
-	var notes []string
-	if adapter.Type() == db.TypeRedis && adapter.ToolAllowed(ToolRedisCommand) && a.Spec.Tools.GloballyAllowed(ToolRedisCommand) {
-		notes = append(notes, "redis_command is listed as a read tool; write and admin Redis commands are still blocked unless this connection's access mode allows them")
-	}
-	if adapter.Type() == db.TypePostgres && containsString(allowed, ToolPostgresExecute) && !adapter.Access().Allows(access.OpAdmin) {
-		notes = append(notes, "postgres_execute allows DML (INSERT/UPDATE/DELETE); DDL such as CREATE/DROP requires admin access")
+		if tool.Note != nil {
+			if note := tool.Note(adapter, ok); note != "" {
+				notes = append(notes, note)
+			}
+		}
 	}
 
 	return permissionReport{
@@ -103,16 +98,10 @@ func (a *App) permissionReport(adapter db.Adapter) permissionReport {
 }
 
 func fetchServerIdentity(ctx context.Context, adapter db.Adapter) (any, error) {
-	switch a := adapter.(type) {
-	case *mongodb.Adapter:
-		return a.Identity(ctx)
-	case *postgres.Adapter:
-		return a.Identity(ctx)
-	case *redisdb.Adapter:
-		return a.Identity(ctx)
-	default:
-		return nil, nil
+	if ident, ok := adapter.(db.IdentityProvider); ok {
+		return ident.Identity(ctx)
 	}
+	return nil, nil
 }
 
 func containsString(items []string, want string) bool {

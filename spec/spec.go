@@ -2,8 +2,6 @@ package spec
 
 import (
 	"fmt"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -223,116 +221,6 @@ func normalizeConnection(c *Connection, defaults Defaults, defaultConnectTimeout
 		c.URI = uri
 	}
 	return nil
-}
-
-// NormalizeType maps type aliases onto canonical names.
-func NormalizeType(raw string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "mongo", "mongodb":
-		return "mongodb", nil
-	case "postgres", "postgresql", "pg":
-		return "postgres", nil
-	case "redis":
-		return "redis", nil
-	case "":
-		return "", fmt.Errorf("type is required")
-	default:
-		return "", fmt.Errorf("unsupported database type %q (supported: mongodb, postgres, redis)", raw)
-	}
-}
-
-func buildURI(c *Connection) (string, error) {
-	if strings.TrimSpace(c.Host) == "" {
-		return "", fmt.Errorf("uri or host is required")
-	}
-	switch c.TypeNormalized {
-	case "mongodb":
-		return buildMongoURI(c), nil
-	case "postgres":
-		return buildPostgresURI(c), nil
-	case "redis":
-		return buildRedisURI(c), nil
-	default:
-		return "", fmt.Errorf("unsupported database type %q", c.TypeNormalized)
-	}
-}
-
-func buildMongoURI(c *Connection) string {
-	port := c.Port
-	if port == 0 {
-		port = 27017
-	}
-	u := &url.URL{
-		Scheme: "mongodb",
-		Host:   joinHostPort(c.Host, port),
-	}
-	if c.User != "" {
-		if c.Password != "" {
-			u.User = url.UserPassword(c.User, c.Password)
-		} else {
-			u.User = url.User(c.User)
-		}
-	}
-	if c.Database != "" {
-		u.Path = "/" + c.Database
-	} else {
-		u.Path = "/"
-	}
-	return u.String()
-}
-
-func buildPostgresURI(c *Connection) string {
-	port := c.Port
-	if port == 0 {
-		port = 5432
-	}
-	u := &url.URL{
-		Scheme: "postgres",
-		Host:   joinHostPort(c.Host, port),
-		Path:   "/" + c.Database,
-	}
-	if c.User != "" {
-		if c.Password != "" {
-			u.User = url.UserPassword(c.User, c.Password)
-		} else {
-			u.User = url.User(c.User)
-		}
-	}
-	q := url.Values{}
-	if c.SSLMode != "" {
-		q.Set("sslmode", c.SSLMode)
-	}
-	u.RawQuery = q.Encode()
-	return u.String()
-}
-
-func buildRedisURI(c *Connection) string {
-	port := c.Port
-	if port == 0 {
-		port = 6379
-	}
-	u := &url.URL{
-		Scheme: "redis",
-		Host:   joinHostPort(c.Host, port),
-		Path:   "/" + strconv.Itoa(c.RedisDB),
-	}
-	if c.Password != "" {
-		if c.User != "" {
-			u.User = url.UserPassword(c.User, c.Password)
-		} else {
-			u.User = url.UserPassword("", c.Password)
-		}
-	} else if c.User != "" {
-		u.User = url.User(c.User)
-	}
-	return u.String()
-}
-
-func joinHostPort(host string, port int) string {
-	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
-		return "[" + host + "]:" + strconv.Itoa(port)
-	}
-	return host + ":" + strconv.Itoa(port)
 }
 
 // ToolAllowed reports whether a tool can run against this connection's allow/deny lists.

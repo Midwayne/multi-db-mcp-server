@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"dbmcp/access"
+	"dbmcp/db"
+	redisdb "dbmcp/db/redis"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -139,4 +141,26 @@ func registerRedisDelete(s *mcpserver.MCPServer, app *App) {
 		}
 		return jsonResult(map[string]any{"deleted": n})
 	})
+}
+
+func (a *App) requireRedis(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*redisdb.Adapter, *mcp.CallToolResult) {
+	return requireAs[*redisdb.Adapter](a, ctx, request, tool, db.TypeRedis, op)
+}
+
+func redisCommandNote(_ db.Adapter, allowed bool) string {
+	if allowed {
+		return "redis_command is listed as a read tool; write and admin Redis commands are still blocked unless this connection's access mode allows them"
+	}
+	return ""
+}
+
+func init() {
+	RegisterEngineTools(
+		toolSpec{Name: ToolRedisCommand, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisCommand, Note: redisCommandNote},
+		toolSpec{Name: ToolRedisGet, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisGet},
+		toolSpec{Name: ToolRedisScan, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisScan},
+		toolSpec{Name: ToolRedisInfo, DBType: db.TypeRedis, Op: access.OpRead, Register: registerRedisInfo},
+		toolSpec{Name: ToolRedisSet, DBType: db.TypeRedis, Op: access.OpWrite, Register: registerRedisSet},
+		toolSpec{Name: ToolRedisDelete, DBType: db.TypeRedis, Op: access.OpWrite, Register: registerRedisDelete},
+	)
 }

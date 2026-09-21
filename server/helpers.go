@@ -6,9 +6,6 @@ import (
 
 	"dbmcp/access"
 	"dbmcp/db"
-	"dbmcp/db/mongodb"
-	"dbmcp/db/postgres"
-	redisdb "dbmcp/db/redis"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -61,41 +58,16 @@ func (a *App) requireAdapter(ctx context.Context, request mcp.CallToolRequest, t
 	return adapter, nil
 }
 
-func (a *App) requireMongo(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*mongodb.Adapter, *mcp.CallToolResult) {
-	adapter, res := a.requireAdapter(ctx, request, tool, db.TypeMongoDB, op)
+func requireAs[T db.Adapter](app *App, ctx context.Context, request mcp.CallToolRequest, tool string, expected db.Type, op access.Operation) (T, *mcp.CallToolResult) {
+	var zero T
+	adapter, res := app.requireAdapter(ctx, request, tool, expected, op)
 	if res != nil {
-		return nil, res
+		return zero, res
 	}
-	mongo, ok := adapter.(*mongodb.Adapter)
+	typed, ok := adapter.(T)
 	if !ok {
-		res, _ := errResult(fmt.Errorf("connection %q is not a mongodb adapter", adapter.Name()))
-		return nil, res
+		res, _ := errResult(fmt.Errorf("connection %q is not a %s adapter", adapter.Name(), expected))
+		return zero, res
 	}
-	return mongo, nil
-}
-
-func (a *App) requirePostgres(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*postgres.Adapter, *mcp.CallToolResult) {
-	adapter, res := a.requireAdapter(ctx, request, tool, db.TypePostgres, op)
-	if res != nil {
-		return nil, res
-	}
-	pg, ok := adapter.(*postgres.Adapter)
-	if !ok {
-		res, _ := errResult(fmt.Errorf("connection %q is not a postgres adapter", adapter.Name()))
-		return nil, res
-	}
-	return pg, nil
-}
-
-func (a *App) requireRedis(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*redisdb.Adapter, *mcp.CallToolResult) {
-	adapter, res := a.requireAdapter(ctx, request, tool, db.TypeRedis, op)
-	if res != nil {
-		return nil, res
-	}
-	r, ok := adapter.(*redisdb.Adapter)
-	if !ok {
-		res, _ := errResult(fmt.Errorf("connection %q is not a redis adapter", adapter.Name()))
-		return nil, res
-	}
-	return r, nil
+	return typed, nil
 }

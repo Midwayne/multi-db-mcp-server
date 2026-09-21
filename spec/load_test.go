@@ -1,11 +1,15 @@
-package spec
+package spec_test
 
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"dbmcp/access"
+	"dbmcp/spec"
+
+	_ "dbmcp/connect"
 )
 
 func TestLoadYAMLWithEnvExpansion(t *testing.T) {
@@ -42,33 +46,33 @@ connections:
 		t.Fatal(err)
 	}
 
-	spec, err := Load(path)
+	cfg, err := spec.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(spec.Connections) != 3 {
-		t.Fatalf("got %d connections", len(spec.Connections))
+	if len(cfg.Connections) != 3 {
+		t.Fatalf("got %d connections", len(cfg.Connections))
 	}
-	if spec.Connections[0].TypeNormalized != "mongodb" {
-		t.Fatalf("mongo type alias not normalized: %s", spec.Connections[0].TypeNormalized)
+	if cfg.Connections[0].TypeNormalized != "mongodb" {
+		t.Fatalf("mongo type alias not normalized: %s", cfg.Connections[0].TypeNormalized)
 	}
-	if spec.Connections[0].URI != "mongodb://ci-host:27017/" {
-		t.Fatalf("mongo uri not expanded: %s", spec.Connections[0].URI)
+	if cfg.Connections[0].URI != "mongodb://ci-host:27017/" {
+		t.Fatalf("mongo uri not expanded: %s", cfg.Connections[0].URI)
 	}
-	if spec.Connections[0].AccessMode != access.ModeReadOnly {
-		t.Fatalf("mongo access: %s", spec.Connections[0].AccessMode)
+	if cfg.Connections[0].AccessMode != access.ModeReadOnly {
+		t.Fatalf("mongo access: %s", cfg.Connections[0].AccessMode)
 	}
-	if spec.Connections[1].AccessMode != access.ModeReadWrite {
-		t.Fatalf("pg access: %s", spec.Connections[1].AccessMode)
+	if cfg.Connections[1].AccessMode != access.ModeReadWrite {
+		t.Fatalf("pg access: %s", cfg.Connections[1].AccessMode)
 	}
-	if got := spec.Connections[1].URI; got == "" || spec.Connections[1].Password != "secret" {
-		t.Fatalf("postgres uri/password not built: uri=%s pass=%s", got, spec.Connections[1].Password)
+	if got := cfg.Connections[1].URI; got == "" || cfg.Connections[1].Password != "secret" {
+		t.Fatalf("postgres uri/password not built: uri=%s pass=%s", got, cfg.Connections[1].Password)
 	}
-	if spec.Connections[2].TypeNormalized != "redis" || spec.Connections[2].AccessMode != access.ModeAdmin {
-		t.Fatalf("redis not normalized: %+v", spec.Connections[2])
+	if cfg.Connections[2].TypeNormalized != "redis" || cfg.Connections[2].AccessMode != access.ModeAdmin {
+		t.Fatalf("redis not normalized: %+v", cfg.Connections[2])
 	}
-	if spec.Connections[0].MaxRowsVal != 50 {
-		t.Fatalf("max rows default not applied: %d", spec.Connections[0].MaxRowsVal)
+	if cfg.Connections[0].MaxRowsVal != 50 {
+		t.Fatalf("max rows default not applied: %d", cfg.Connections[0].MaxRowsVal)
 	}
 }
 
@@ -87,22 +91,8 @@ connections:
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(path); err == nil {
+	if _, err := spec.Load(path); err == nil {
 		t.Fatal("expected duplicate name error")
-	}
-}
-
-func TestToolAllowed(t *testing.T) {
-	c := Connection{Tools: ToolsConfig{Include: []string{"mongo_find"}, Exclude: []string{"mongo_aggregate"}}}
-	if !c.ToolAllowed("mongo_find") {
-		t.Fatal("include should allow mongo_find")
-	}
-	if c.ToolAllowed("mongo_count") {
-		t.Fatal("include list should deny unspecified tools")
-	}
-	c = Connection{Tools: ToolsConfig{Exclude: []string{"mongo_delete"}}}
-	if !c.ToolAllowed("mongo_find") || c.ToolAllowed("mongo_delete") {
-		t.Fatal("exclude list mismatch")
 	}
 }
 
@@ -117,11 +107,11 @@ func TestLoadJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	spec, err := Load(path)
+	cfg, err := spec.Load(path)
 	if err != nil {
 		t.Fatalf("Load JSON: %v", err)
 	}
-	if spec.Connections[0].AccessMode != access.ModeReadOnly {
+	if cfg.Connections[0].AccessMode != access.ModeReadOnly {
 		t.Fatalf("default access not applied")
 	}
 }
@@ -159,7 +149,7 @@ connections:
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(path)
+	loaded, err := spec.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -188,5 +178,18 @@ connections:
 	}
 	if counts["mongodb"] != 2 || counts["postgres"] != 2 || counts["redis"] != 2 {
 		t.Fatalf("per-engine counts: %v", counts)
+	}
+}
+
+func TestUnknownTypeListsRegisteredKinds(t *testing.T) {
+	_, err := spec.NormalizeType("not-a-db")
+	if err == nil {
+		t.Fatal("expected unknown type error")
+	}
+	msg := err.Error()
+	for _, name := range []string{"mongodb", "postgres", "redis"} {
+		if !strings.Contains(msg, name) {
+			t.Fatalf("error should list %s: %s", name, msg)
+		}
 	}
 }

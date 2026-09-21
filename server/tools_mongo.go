@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"dbmcp/access"
+	"dbmcp/db"
+	"dbmcp/db/mongodb"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -262,4 +264,24 @@ func registerMongoDelete(s *mcpserver.MCPServer, app *App) {
 		}
 		return jsonResult(result)
 	})
+}
+
+func (a *App) requireMongo(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*mongodb.Adapter, *mcp.CallToolResult) {
+	return requireAs[*mongodb.Adapter](a, ctx, request, tool, db.TypeMongoDB, op)
+}
+
+func init() {
+	RegisterEngineTools(
+		toolSpec{Name: ToolMongoFind, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoFind},
+		toolSpec{Name: ToolMongoAggregate, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoAggregate},
+		toolSpec{Name: ToolMongoCount, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoCount},
+		toolSpec{Name: ToolMongoListDatabases, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoListDatabases},
+		toolSpec{Name: ToolMongoListCollections, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoListCollections},
+		toolSpec{Name: ToolMongoIndexes, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoIndexes},
+		toolSpec{Name: ToolMongoSchema, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoSchema},
+		toolSpec{Name: ToolMongoStats, DBType: db.TypeMongoDB, Op: access.OpRead, Register: registerMongoStats},
+		toolSpec{Name: ToolMongoInsert, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoInsert},
+		toolSpec{Name: ToolMongoUpdate, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoUpdate},
+		toolSpec{Name: ToolMongoDelete, DBType: db.TypeMongoDB, Op: access.OpWrite, Register: registerMongoDelete},
+	)
 }

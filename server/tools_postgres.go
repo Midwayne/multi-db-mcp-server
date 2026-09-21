@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"dbmcp/access"
+	"dbmcp/db"
+	"dbmcp/db/postgres"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -145,4 +147,27 @@ func registerPostgresStats(s *mcpserver.MCPServer, app *App) {
 		}
 		return jsonResult(stats)
 	})
+}
+
+func (a *App) requirePostgres(ctx context.Context, request mcp.CallToolRequest, tool string, op access.Operation) (*postgres.Adapter, *mcp.CallToolResult) {
+	return requireAs[*postgres.Adapter](a, ctx, request, tool, db.TypePostgres, op)
+}
+
+func postgresExecuteNote(adapter db.Adapter, allowed bool) string {
+	if allowed && !adapter.Access().Allows(access.OpAdmin) {
+		return "postgres_execute allows DML (INSERT/UPDATE/DELETE); DDL such as CREATE/DROP requires admin access"
+	}
+	return ""
+}
+
+func init() {
+	RegisterEngineTools(
+		toolSpec{Name: ToolPostgresQuery, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresQuery},
+		toolSpec{Name: ToolPostgresExecute, DBType: db.TypePostgres, Op: access.OpWrite, Register: registerPostgresExecute, Note: postgresExecuteNote},
+		toolSpec{Name: ToolPostgresListDatabases, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListDatabases},
+		toolSpec{Name: ToolPostgresListSchemas, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListSchemas},
+		toolSpec{Name: ToolPostgresListTables, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresListTables},
+		toolSpec{Name: ToolPostgresDescribeTable, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresDescribeTable},
+		toolSpec{Name: ToolPostgresStats, DBType: db.TypePostgres, Op: access.OpRead, Register: registerPostgresStats},
+	)
 }

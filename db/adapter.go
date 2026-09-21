@@ -32,6 +32,12 @@ type Adapter interface {
 	Landscape(ctx context.Context) (any, error)
 }
 
+// IdentityProvider is an optional adapter capability used by list_permissions
+// when include_server is true. Engines that do not implement it are skipped.
+type IdentityProvider interface {
+	Identity(ctx context.Context) (any, error)
+}
+
 // Info is a JSON-serializable view of a configured connection.
 type Info struct {
 	Name     string      `json:"name"`
