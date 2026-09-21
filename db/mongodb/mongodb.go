@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -267,8 +268,14 @@ func (a *Adapter) Stats(ctx context.Context, dbName string) (bson.M, error) {
 	return stats, err
 }
 
-func (a *Adapter) ListDatabases(ctx context.Context) ([]string, error) {
-	return a.client.ListDatabaseNames(ctx, bson.D{})
+// DatabaseInfo is a MongoDB database and the collections it contains.
+type DatabaseInfo struct {
+	Name        string   `json:"name"`
+	Collections []string `json:"collections"`
+}
+
+func (a *Adapter) ListDatabases(ctx context.Context) ([]DatabaseInfo, error) {
+	return a.listDatabasesWithCollections(ctx)
 }
 
 func (a *Adapter) ListCollections(ctx context.Context, dbName string) ([]string, error) {
@@ -276,7 +283,42 @@ func (a *Adapter) ListCollections(ctx context.Context, dbName string) ([]string,
 	if err != nil {
 		return nil, err
 	}
-	return a.client.Database(resolved).ListCollectionNames(ctx, bson.D{})
+	return a.collectionNames(ctx, resolved)
+}
+
+func (a *Adapter) listDatabasesWithCollections(ctx context.Context) ([]DatabaseInfo, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("mongodb client is not connected")
+	}
+	dbNames, err := a.client.ListDatabaseNames(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(dbNames)
+	out := make([]DatabaseInfo, 0, len(dbNames))
+	for _, name := range dbNames {
+		cols, err := a.collectionNames(ctx, name)
+		if err != nil {
+			cols = []string{}
+		}
+		out = append(out, DatabaseInfo{Name: name, Collections: cols})
+	}
+	return out, nil
+}
+
+func (a *Adapter) collectionNames(ctx context.Context, dbName string) ([]string, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("mongodb client is not connected")
+	}
+	cols, err := a.client.Database(dbName).ListCollectionNames(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	if cols == nil {
+		cols = []string{}
+	}
+	sort.Strings(cols)
+	return cols, nil
 }
 
 func (a *Adapter) Insert(ctx context.Context, dbName, collName, documentsJSON string) (*db.ExecResult, error) {
@@ -358,22 +400,20 @@ func (a *Adapter) Landscape(ctx context.Context) (any, error) {
 	if err := a.EnsureConnected(ctx); err != nil {
 		return nil, err
 	}
-	dbNames, err := a.client.ListDatabaseNames(ctx, bson.D{})
+	dbs, err := a.listDatabasesWithCollections(ctx)
 	if err != nil {
-		if a.Conn.Database != "" {
-			dbNames = []string{a.Conn.Database}
-		} else {
+		if a.Conn.Database == "" {
 			return nil, err
 		}
-	}
-	hostData := make(map[string][]string, len(dbNames))
-	for _, name := range dbNames {
-		cols, err := a.client.Database(name).ListCollectionNames(ctx, bson.D{})
-		if err != nil {
-			hostData[name] = []string{}
-			continue
+		cols, colErr := a.ListCollections(ctx, a.Conn.Database)
+		if colErr != nil {
+			cols = []string{}
 		}
-		hostData[name] = cols
+		dbs = []DatabaseInfo{{Name: a.Conn.Database, Collections: cols}}
+	}
+	hostData := make(map[string][]string, len(dbs))
+	for _, info := range dbs {
+		hostData[info.Name] = info.Collections
 	}
 	return hostData, nil
 }

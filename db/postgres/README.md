@@ -53,7 +53,7 @@ Every tool requires `connection`. Query rows are capped by `max_rows` (default 2
 | Tool | Arguments | What it does |
 | --- | --- | --- |
 | `postgres_query` | `sql`, optional `params` | Run a read-only statement (`SELECT`, `WITH`…`SELECT`, `EXPLAIN`, `SHOW`, …). |
-| `postgres_list_databases` | — | List non-template databases. |
+| `postgres_list_databases` | — | List non-template databases and the schemas in each. |
 | `postgres_list_schemas` | — | List schemas. |
 | `postgres_list_tables` | optional `schema` | List tables (excludes `pg_catalog` / `information_schema`). |
 | `postgres_describe_table` | `table`, optional `schema` (default `public`) | Column names, types, nullability, defaults. |

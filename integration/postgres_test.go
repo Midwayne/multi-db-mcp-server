@@ -137,6 +137,25 @@ connections:
 		t.Fatalf("analytics tables: %s", tables)
 	}
 
+	dbs := callToolText(t, cl, server.ToolPostgresListDatabases, map[string]any{
+		"connection": "pg-app",
+	})
+	var databases []struct {
+		Name    string   `json:"name"`
+		Schemas []string `json:"schemas"`
+	}
+	decodeJSON(t, dbs, &databases)
+	byDB := map[string][]string{}
+	for _, info := range databases {
+		byDB[info.Name] = info.Schemas
+	}
+	if !containsString(byDB["app"], "public") {
+		t.Fatalf("list databases missing app.public: %s", dbs)
+	}
+	if !containsString(byDB["analytics"], "public") {
+		t.Fatalf("list databases missing analytics.public: %s", dbs)
+	}
+
 	desc := callToolText(t, cl, server.ToolPostgresDescribeTable, map[string]any{
 		"connection": "pg-app",
 		"table":      "items",

@@ -49,7 +49,7 @@ Every tool requires `connection`. `db_name` defaults to the connection’s `data
 | `mongo_find` | `collection_name`, optional `db_name`, `filter`, `projection`, `sort`, `limit`, `skip` | Find documents. `filter` / `projection` / `sort` are JSON objects; `filter` defaults to `{}`. |
 | `mongo_aggregate` | `collection_name`, `pipeline` (JSON array), optional `db_name` | Run an aggregation pipeline. |
 | `mongo_count` | `collection_name`, optional `db_name`, `filter` | Count documents matching `filter`. |
-| `mongo_list_databases` | — | List database names on the server. |
+| `mongo_list_databases` | — | List databases on the server and the collections in each. |
 | `mongo_list_collections` | optional `db_name` | List collections in a database. |
 | `mongo_indexes` | `collection_name`, optional `db_name` | List indexes. |
 | `mongo_schema` | `collection_name`, optional `db_name`, `sample` | Infer field types by sampling documents (default 10). |
