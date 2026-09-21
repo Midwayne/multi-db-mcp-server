@@ -125,3 +125,68 @@ func TestLoadJSON(t *testing.T) {
 		t.Fatalf("default access not applied")
 	}
 }
+
+func TestLoadMultipleConnectionsPerEngine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "spec.yaml")
+	contents := `
+connections:
+  - name: mongo-dev
+    type: mongodb
+    uri: mongodb://localhost:27017/dev
+    access: read_only
+  - name: mongo-prod
+    type: mongo
+    uri: mongodb://localhost:27018/prod
+    access: read_write
+  - name: pg-analytics
+    type: postgres
+    uri: postgres://localhost:5432/analytics
+    access: read_only
+  - name: pg-app
+    type: pg
+    uri: postgres://localhost:5432/app
+    access: read_write
+  - name: redis-cache
+    type: redis
+    uri: redis://localhost:6379/0
+    access: read_only
+  - name: redis-jobs
+    type: redis
+    uri: redis://localhost:6379/1
+    access: admin
+`
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(loaded.Connections) != 6 {
+		t.Fatalf("got %d connections, want 6", len(loaded.Connections))
+	}
+
+	want := []struct {
+		name string
+		typ  string
+		mode access.Mode
+	}{
+		{"mongo-dev", "mongodb", access.ModeReadOnly},
+		{"mongo-prod", "mongodb", access.ModeReadWrite},
+		{"pg-analytics", "postgres", access.ModeReadOnly},
+		{"pg-app", "postgres", access.ModeReadWrite},
+		{"redis-cache", "redis", access.ModeReadOnly},
+		{"redis-jobs", "redis", access.ModeAdmin},
+	}
+	counts := map[string]int{}
+	for i, c := range loaded.Connections {
+		if c.Name != want[i].name || c.TypeNormalized != want[i].typ || c.AccessMode != want[i].mode {
+			t.Fatalf("connection %d: got name=%s type=%s access=%s want %+v", i, c.Name, c.TypeNormalized, c.AccessMode, want[i])
+		}
+		counts[c.TypeNormalized]++
+	}
+	if counts["mongodb"] != 2 || counts["postgres"] != 2 || counts["redis"] != 2 {
+		t.Fatalf("per-engine counts: %v", counts)
+	}
+}

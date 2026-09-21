@@ -76,3 +76,15 @@ func mixedConnections() []spec.Connection {
 		{Name: "cache", TypeNormalized: "redis", AccessMode: access.ModeAdmin},
 	}
 }
+
+// multipleSameTypeConnections has two of each engine, with different access modes.
+func multipleSameTypeConnections() []spec.Connection {
+	return []spec.Connection{
+		{Name: "mongo-dev", TypeNormalized: "mongodb", AccessMode: access.ModeReadOnly, Database: "dev"},
+		{Name: "mongo-prod", TypeNormalized: "mongodb", AccessMode: access.ModeReadWrite, Database: "prod"},
+		{Name: "pg-analytics", TypeNormalized: "postgres", AccessMode: access.ModeReadOnly},
+		{Name: "pg-app", TypeNormalized: "postgres", AccessMode: access.ModeReadWrite},
+		{Name: "redis-cache", TypeNormalized: "redis", AccessMode: access.ModeReadOnly},
+		{Name: "redis-jobs", TypeNormalized: "redis", AccessMode: access.ModeAdmin},
+	}
+}

@@ -134,3 +134,66 @@ func TestRegistryUnknownConnection(t *testing.T) {
 		t.Fatalf("read_only flags: %+v", info[0])
 	}
 }
+
+func TestRegistryMultipleConnectionsPerEngine(t *testing.T) {
+	t.Parallel()
+	sp := &spec.Spec{Connections: []spec.Connection{
+		testConn("mongo-dev", "mongodb", access.ModeReadOnly, nil),
+		testConn("mongo-prod", "mongodb", access.ModeReadWrite, nil),
+		testConn("pg-analytics", "postgres", access.ModeReadOnly, nil),
+		testConn("pg-app", "postgres", access.ModeReadWrite, nil),
+		testConn("redis-cache", "redis", access.ModeReadOnly, nil),
+		testConn("redis-jobs", "redis", access.ModeAdmin, nil),
+	}}
+	reg, err := NewRegistry(context.Background(), sp, func(c spec.Connection) (Adapter, error) {
+		return &stubAdapter{Meta: Meta{Conn: c}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info := reg.List()
+	if len(info) != 6 {
+		t.Fatalf("List()=%d want 6", len(info))
+	}
+	byName := map[string]Info{}
+	counts := map[Type]int{}
+	for _, item := range info {
+		byName[item.Name] = item
+		counts[item.Type]++
+	}
+	if counts[TypeMongoDB] != 2 || counts[TypePostgres] != 2 || counts[TypeRedis] != 2 {
+		t.Fatalf("per-engine counts: %v", counts)
+	}
+
+	for _, name := range []string{"mongo-dev", "mongo-prod", "pg-analytics", "pg-app", "redis-cache", "redis-jobs"} {
+		adapter, err := reg.Get(context.Background(), name)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", name, err)
+		}
+		if adapter.Name() != name {
+			t.Fatalf("Get(%s) returned %s", name, adapter.Name())
+		}
+	}
+
+	dev, err := reg.Get(context.Background(), "mongo-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prod, err := reg.Get(context.Background(), "mongo-prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dev.Name() == prod.Name() || dev.Access() == prod.Access() {
+		t.Fatal("two mongo connections must stay distinct")
+	}
+	if !reg.AnyAllows(TypeMongoDB, access.OpWrite, "mongo_insert") {
+		t.Fatal("mongo_insert should be allowed because mongo-prod is read_write")
+	}
+	if !byName["mongo-dev"].CanRead || byName["mongo-dev"].CanWrite {
+		t.Fatalf("mongo-dev flags: %+v", byName["mongo-dev"])
+	}
+	if !byName["mongo-prod"].CanWrite {
+		t.Fatalf("mongo-prod flags: %+v", byName["mongo-prod"])
+	}
+}
