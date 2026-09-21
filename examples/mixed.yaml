@@ -1,0 +1,23 @@
+# Three databases in one spec. Each has its own access mode.
+# The agent uses the name (analytics, app, cache) as the `connection` argument.
+
+defaults:
+  access: read_only
+  max_rows: 200
+
+connections:
+  - name: analytics
+    type: postgres
+    uri: ${POSTGRES_URI:-postgres://postgres:postgres@localhost:5432/analytics?sslmode=disable}
+    access: read_only
+
+  - name: app
+    type: mongodb
+    uri: ${MONGO_URI:-mongodb://localhost:27017}
+    database: app
+    access: read_write
+
+  - name: cache
+    type: redis
+    uri: ${REDIS_URI:-redis://localhost:6379/0}
+    access: read_only
