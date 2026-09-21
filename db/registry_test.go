@@ -84,4 +84,7 @@ func TestRegistryUnknownConnection(t *testing.T) {
 	if len(info) != 1 || info[0].Name != "only" || info[0].Type != TypeRedis {
 		t.Fatalf("unexpected list: %+v", info)
 	}
+	if !info[0].CanRead || info[0].CanWrite || info[0].CanAdmin {
+		t.Fatalf("read_only flags: %+v", info[0])
+	}
 }

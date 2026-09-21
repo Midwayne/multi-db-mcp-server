@@ -84,6 +84,9 @@ func (r *Registry) List() []Info {
 			Name:     a.Name(),
 			Type:     a.Type(),
 			Access:   a.Access(),
+			CanRead:  a.Access().Allows(access.OpRead),
+			CanWrite: a.Access().Allows(access.OpWrite),
+			CanAdmin: a.Access().Allows(access.OpAdmin),
 			Database: a.DefaultDatabase(),
 			Ready:    a.Connected(),
 		})

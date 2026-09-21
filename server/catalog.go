@@ -9,6 +9,7 @@ import (
 
 const (
 	ToolListConnections = "list_connections"
+	ToolListPermissions = "list_permissions"
 	ToolPing            = "ping"
 	ToolLandscape       = "landscape"
 
@@ -50,6 +51,7 @@ type toolSpec struct {
 func catalog() []toolSpec {
 	return []toolSpec{
 		{Name: ToolListConnections, Op: access.OpRead, Register: registerListConnections},
+		{Name: ToolListPermissions, Op: access.OpRead, Register: registerListPermissions},
 		{Name: ToolPing, Op: access.OpRead, Register: registerPing},
 		{Name: ToolLandscape, Op: access.OpRead, Register: registerLandscape},
 

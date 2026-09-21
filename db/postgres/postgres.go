@@ -86,6 +86,41 @@ func (a *Adapter) Connected() bool {
 	return a.ready
 }
 
+func (a *Adapter) Identity(ctx context.Context) (any, error) {
+	if err := a.EnsureConnected(ctx); err != nil {
+		return nil, err
+	}
+	row := a.pool.QueryRow(ctx, `
+		SELECT
+			current_user,
+			session_user,
+			current_database(),
+			r.rolsuper,
+			r.rolcreaterole,
+			r.rolcreatedb,
+			has_database_privilege(current_user, current_database(), 'CONNECT'),
+			has_database_privilege(current_user, current_database(), 'CREATE'),
+			has_database_privilege(current_user, current_database(), 'TEMP')
+		FROM pg_roles r
+		WHERE r.rolname = current_user`)
+	var user, sessionUser, database string
+	var superuser, createRole, createDB, canConnect, canCreate, canTemp bool
+	if err := row.Scan(&user, &sessionUser, &database, &superuser, &createRole, &createDB, &canConnect, &canCreate, &canTemp); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"user":         user,
+		"session_user": sessionUser,
+		"database":     database,
+		"superuser":    superuser,
+		"create_role":  createRole,
+		"create_db":    createDB,
+		"can_connect":  canConnect,
+		"can_create":   canCreate,
+		"can_temp":     canTemp,
+	}, nil
+}
+
 func (a *Adapter) Query(ctx context.Context, sqlText, paramsJSON string) (*db.QueryResult, error) {
 	op, err := access.ClassifySQL(sqlText)
 	if err != nil {

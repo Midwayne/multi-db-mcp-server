@@ -62,4 +62,4 @@ Serve modes: `stdio` (default), `http`, and `sse`.
 }
 ```
 
-Call `list_connections` first, then engine tools with the `connection` argument matching the spec name (`mongo_find`, `postgres_query`, `redis_get`, and so on).
+Call `list_connections` to see every spec database, or `list_permissions` to view access modes and allowed tools. Omit `connection` to inspect all databases, or pass `connection` for one. Then call engine tools with that same name (`mongo_find`, `postgres_query`, `redis_get`, and so on). Set `include_server: true` on `list_permissions` to also fetch live engine identity (Mongo roles, Postgres role flags, Redis ACL user).

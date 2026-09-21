@@ -16,7 +16,7 @@ type App struct {
 
 func NewMCPServer(app *App) *server.MCPServer {
 	instructions := fmt.Sprintf(
-		"%s is a multi-database MCP server. Use list_connections to see configured databases, then call engine-specific tools with the connection name. Access modes (read_only, read_write, admin) are enforced per connection.",
+		"%s is a multi-database MCP server. Every spec connection is reachable by its name. Start with list_connections or list_permissions (omit connection for all databases, or pass connection for one). Then call engine tools with that connection name. Access modes (read_only, read_write, admin) are enforced per connection.",
 		app.Spec.Server.Name,
 	)
 	s := server.NewMCPServer(

@@ -81,6 +81,18 @@ func (a *Adapter) Connected() bool {
 	return a.ready
 }
 
+func (a *Adapter) Identity(ctx context.Context) (any, error) {
+	if err := a.EnsureConnected(ctx); err != nil {
+		return nil, err
+	}
+	var status bson.M
+	err := a.client.Database("admin").RunCommand(ctx, bson.D{{Key: "connectionStatus", Value: 1}}).Decode(&status)
+	if err != nil {
+		return nil, err
+	}
+	return status, nil
+}
+
 func (a *Adapter) Client() *mongo.Client {
 	return a.client
 }

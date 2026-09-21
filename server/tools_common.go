@@ -11,9 +11,23 @@ import (
 
 func registerListConnections(s *server.MCPServer, app *App) {
 	s.AddTool(mcp.NewTool(ToolListConnections,
-		mcp.WithDescription("List configured database connections, their engine types, and access modes"),
+		mcp.WithDescription("List every database defined in the spec file: name, engine type, access mode (read_only/read_write/admin), and can_read/can_write/can_admin flags. Use the name as the connection argument on later tools."),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return jsonResult(app.Registry.List())
+	})
+}
+
+func registerListPermissions(s *server.MCPServer, app *App) {
+	s.AddTool(mcp.NewTool(ToolListPermissions,
+		mcp.WithDescription("View permissions for one database or every database in the spec: access mode, allowed/denied tools, and optional live server identity. Omit connection to list all."),
+		mcp.WithString("connection", mcp.Description("Spec connection name. Omit to view permissions for every database.")),
+		mcp.WithBoolean("include_server", mcp.Description("If true, connect and include live engine identity/privileges (Mongo connectionStatus, Postgres role flags, Redis ACL user). Defaults to false.")),
+	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		reports, err := app.permissionReports(ctx, request.GetString("connection", ""), request.GetBool("include_server", false))
+		if err != nil {
+			return errResult(err)
+		}
+		return jsonResult(reports)
 	})
 }
 

@@ -50,4 +50,9 @@ func TestModeAllows(t *testing.T) {
 	if Mode("weird").Allows(OpRead) {
 		t.Fatal("unknown mode should deny")
 	}
+
+	got := ModeReadWrite.Operations()
+	if len(got) != 2 || got[0] != OpRead || got[1] != OpWrite {
+		t.Fatalf("read_write operations: %v", got)
+	}
 }

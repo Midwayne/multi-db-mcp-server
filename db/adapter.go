@@ -37,6 +37,9 @@ type Info struct {
 	Name     string      `json:"name"`
 	Type     Type        `json:"type"`
 	Access   access.Mode `json:"access"`
+	CanRead  bool        `json:"can_read"`
+	CanWrite bool        `json:"can_write"`
+	CanAdmin bool        `json:"can_admin"`
 	Database string      `json:"database,omitempty"`
 	Ready    bool        `json:"ready"`
 }

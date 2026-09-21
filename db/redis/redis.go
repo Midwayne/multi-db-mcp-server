@@ -75,6 +75,25 @@ func (a *Adapter) Connected() bool {
 	return a.ready
 }
 
+func (a *Adapter) Identity(ctx context.Context) (any, error) {
+	if err := a.EnsureConnected(ctx); err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	who, err := a.client.Do(ctx, "ACL", "WHOAMI").Result()
+	if err != nil {
+		out["acl_error"] = err.Error()
+	} else {
+		out["acl_user"] = who
+	}
+	size, err := a.client.DBSize(ctx).Result()
+	if err != nil {
+		return out, err
+	}
+	out["db_size"] = size
+	return out, nil
+}
+
 func (a *Adapter) Get(ctx context.Context, key string) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("key is required")

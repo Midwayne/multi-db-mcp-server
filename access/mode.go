@@ -55,3 +55,15 @@ func (m Mode) Allows(op Operation) bool {
 func (m Mode) DenyMessage(op Operation) string {
 	return fmt.Sprintf("connection access mode %q does not allow %s operations", m, op)
 }
+
+// Operations returns the operation kinds this mode permits, in a stable order.
+func (m Mode) Operations() []Operation {
+	all := []Operation{OpRead, OpWrite, OpAdmin}
+	out := make([]Operation, 0, len(all))
+	for _, op := range all {
+		if m.Allows(op) {
+			out = append(out, op)
+		}
+	}
+	return out
+}
