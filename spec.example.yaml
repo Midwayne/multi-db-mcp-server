@@ -1,0 +1,51 @@
+# Copy to spec.yaml and adjust. Values of the form ${ENV} are expanded at load time.
+
+server:
+  name: Multi-Database MCP
+  version: "0.1.0"
+  serve_mode: stdio   # stdio | http | sse
+  port: 8080
+
+defaults:
+  access: read_only           # read_only | read_write | admin
+  connect_timeout: 10s
+  inactivity_timeout: 30m
+  connect_on_start: true
+  fail_on_connect_error: true
+  max_rows: 200
+
+connections:
+  - name: local-mongo
+    type: mongodb             # aliases: mongo
+    uri: ${MONGO_URI:-mongodb://localhost:27017}
+    database: app             # optional default database for tools
+    access: read_only
+    # tools:
+    #   include: [mongo_find, mongo_count, mongo_list_collections]
+    #   exclude: [mongo_aggregate]
+
+  - name: analytics
+    type: postgres            # aliases: postgresql, pg
+    uri: ${POSTGRES_URI:-postgres://postgres:postgres@localhost:5432/app?sslmode=disable}
+    access: read_write
+    # Discrete fields are used when uri is omitted:
+    # host: localhost
+    # port: 5432
+    # user: postgres
+    # password: ${PGPASSWORD}
+    # database: app
+    # ssl_mode: disable
+
+  - name: cache
+    type: redis
+    uri: ${REDIS_URI:-redis://localhost:6379/0}
+    access: read_only
+    # host: localhost
+    # port: 6379
+    # password: ${REDIS_PASSWORD}
+    # db: 0
+
+tools:
+  # Omit include to enable every tool allowed by connection types and access modes.
+  include: []
+  exclude: []

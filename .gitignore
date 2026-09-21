@@ -1,2 +1,6 @@
 .env
+dbmcp
 mongomcp
+spec.yaml
+spec.yml
+spec.json
